@@ -1,0 +1,11 @@
+﻿  Function.cpp
+  _WIN32_WINNT not defined. Defaulting to _WIN32_WINNT_MAXVER (see WinSDKVer.h)
+e:\ftpclient-master\ftpclient\function.cpp(33): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+e:\ftpclient-master\ftpclient\function.cpp(38): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+e:\ftpclient-master\ftpclient\function.cpp(55): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+e:\ftpclient-master\ftpclient\function.cpp(65): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+e:\ftpclient-master\ftpclient\function.cpp(103): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+e:\ftpclient-master\ftpclient\function.cpp(83): warning C4996: 'mbstowcs': This function or variable may be unsafe. Consider using mbstowcs_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.15063.0\ucrt\stdlib.h(931): note: see declaration of 'mbstowcs'
+  FTPClient.vcxproj -> E:\FTPClient-master\x64\Debug\FTPClient.exe
+  FTPClient.vcxproj -> E:\FTPClient-master\x64\Debug\FTPClient.pdb (Partial PDB)

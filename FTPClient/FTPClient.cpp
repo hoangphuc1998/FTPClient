@@ -55,7 +55,13 @@ int main()
 			} while (!connected);
 			//Login to server
 			logIn(client);
-			while (1) {};
+			
+			while (1) {
+				cout << "-->ftp: ";
+				string command;
+				getline(cin, command);
+				sendCommandToServer(client,command);
+			};
 			client.Close();
         }
     }

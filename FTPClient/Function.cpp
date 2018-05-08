@@ -1,18 +1,18 @@
 ﻿#include "Function.h"
 string receiveMessage(CSocket& sock) {
-	vector<char> buffer(MAX_BUFFER);
+	char buffer;
 	int byteReceived = 0;
 	string res;
 	do {
-		byteReceived = sock.Receive(&buffer[0], MAX_BUFFER, 0);
+		byteReceived = sock.Receive(&buffer, 1, 0);
 		if (byteReceived == -1) {
-			cout << "Error when receiving server data" << endl;
+			//cout << "Error when receiving server data" << endl;
 			return "Error";
 		}
 		else {
-			res.append(buffer.begin(), buffer.begin() + byteReceived);
+			res += buffer;
 		}
-	} while (byteReceived == MAX_BUFFER);
+	} while (buffer!='\n');
 	return res;
 }
 
@@ -21,32 +21,6 @@ int getMessageCode(string message) {
 	string code;
 	is >> code;
 	return stoi(code);
-}
-
-void sendCommandToServer(CSocket& sock, string s) {
-	stringstream is(s);
-	string command;
-	is >> command;
-	for (int i = 0; i < command.length(); i++) {
-		command[i] = tolower(command[i]);
-	}
-	if (command == "pwd") {
-		command += "\r\n";
-		sock.Send((char*)command.c_str(), command.length());
-		cout << receiveMessage(sock);
-	}
-	else if (command == "cd") {
-		command = getParameter(is, "cd");
-		changeServerPath(sock, command);
-	}
-	else if (command == "lcd") {
-		command = getParameter(is, "lcd");
-		changeClientPath(command);
-	}
-	else if (command == "get") {
-		command = getParameter(is, "get");
-		getFile(sock, command);
-	}
 }
 
 void logIn(CSocket& sock) {
@@ -68,74 +42,42 @@ void logIn(CSocket& sock) {
 	} while (code != 230);
 }
 
-void getFile(CSocket& sock, string filename) {
-	string stringSend;
-	string PASV = "PASV\n";
-	
-	CSocket ClientData;
-	ClientData.Create();
-
-	int code = 0;
-	sock.Send((char*)PASV.c_str(), PASV.length());
-	string message = receiveMessage(sock);
-	//String return if succeed: "227 Entering Passive Mode (a1,a2,a3,a4,p1,p2)" 
-	//N = p1 * 256 + p2 IP: a1.a2.a3.a4
-
-	cout << message;
-	string IP;
-	int port;
-
-	//Xử lý tách chuỗi a1 a2 ....
-	int pos = message.find('(');
-	string c = message.substr(pos);
-	string b(c.begin() + 1, c.end() - 1);
-	vector<string> tokens;
-	stringstream k(b);
-
-	string temp;
-
-	while (getline(k, temp, ',')) {
-		tokens.push_back(temp);
-	}
-
-	IP = tokens[0] + '.' + tokens[1] + '.' + tokens[2] + '.' + tokens[3];
-	port = stoi(tokens[4]) * 256 + stoi(tokens[5]);
-	bool connected = false;
-
-	const char* msg = (const char*)IP.c_str();
-	wchar_t *wmsg = new wchar_t[strlen(msg) + 1];
-	mbstowcs(wmsg, msg, strlen(msg) + 1);
-
-	cout << port;
-	if (ClientData.Connect(_T("127.0.0.1"), port) == 0) {
-		cout << "Can't connect to FTP server" << endl;
-	}
-	else {
-		cout << "Successfully connect to FTP server" << endl;
-		connected = true;
-	}
-	stringSend = "RETR " + filename + "\n";
+void getFile(CSocket& sock,CSocket& ClientData, string filename,bool passive) {
+	string stringSend = "RETR " + filename + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
-	cout << receiveMessage(sock);
-	//Open file
-	ofstream f;
-	f.open(filename,ios::out|ios::app|ios::binary);
-	//Data tranfer
-	char buffer[MAX_BUFFER];
-	int receivedLen = 0;
-	do {
-		receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
-		if (receivedLen == -1) {
-			cout << "Error when receiving server data" << endl;
-			break;
+	string command = receiveMessage(sock);
+	cout << command;
+	CSocket activeSock;
+	if (getMessageCode(command) != 550) {
+		if (!passive) {
+			int res = ClientData.Accept(activeSock);
+			cout << res << endl;
 		}
-		else {
-			f.write(buffer, receivedLen);
-		}
-	} while (receivedLen>0);
-	f.close();
-	ClientData.Close();
-	cout << receiveMessage(sock);
+		//Open file
+		ofstream f;
+		f.open(filename, ios::out | ios::binary);
+		//Data tranfer
+		char buffer[MAX_BUFFER];
+		int receivedLen = 0;
+		do {
+			if (passive) {
+				receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
+			}
+			else {
+				receivedLen = activeSock.Receive(buffer, MAX_BUFFER, 0);
+			}
+			if (receivedLen == -1) {
+				cout << "Error when receiving server data" << endl;
+				break;
+			}
+			else {
+				f.write(buffer, receivedLen);
+			}
+		} while (receivedLen > 0);
+		f.close();
+		cout << receiveMessage(sock);
+	}
+	if (!passive)activeSock.Close();
 }
 
 void changeServerPath(CSocket& sock, string path) {
@@ -177,4 +119,126 @@ string getParameter(stringstream& is, string type) {
 	if (temp == "cd") command = "";
 	else is >> command;
 	return command;
+}
+
+//Connect to data port
+bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive) {
+	if (passive) {
+		string stringSend;
+		string PASV = "PASV\n";
+		
+		sock.Send((char*)PASV.c_str(), PASV.length());
+		string message = receiveMessage(sock);
+		//String return if succeed: "227 Entering Passive Mode (a1,a2,a3,a4,p1,p2)" 
+		//N = p1 * 256 + p2 IP: a1.a2.a3.a4
+
+		cout << message;
+		string IP;
+		int port;
+
+		//Xử lý tách chuỗi a1 a2 ....
+		int pos = message.find('(');
+		string c = message.substr(pos);
+		string b(c.begin() + 1, c.end() - 1);
+		vector<string> tokens;
+		stringstream k(b);
+
+		string temp;
+
+		while (getline(k, temp, ',')) {
+			tokens.push_back(temp);
+		}
+
+		IP = tokens[0] + '.' + tokens[1] + '.' + tokens[2] + '.' + tokens[3];
+		port = stoi(tokens[4]) * 256 + stoi(tokens[5]);
+		
+
+		const char* msg = (const char*)IP.c_str();
+		wchar_t *wmsg = new wchar_t[strlen(msg) + 1];
+		mbstowcs(wmsg, msg, strlen(msg) + 1);
+
+		if (ClientData.Connect(_T("127.0.0.1"), port) == 0) {
+			cout << "Can't connect to FTP server" << endl;
+			return false;
+		}
+		else {
+			cout << "Successfully connect to FTP server" << endl;
+		}
+	}
+	else {
+		sockaddr_in add;
+		int addlen = sizeof(add);
+		sock.GetSockName((sockaddr*)&add, &addlen);
+		
+		string portCommand;
+		//Create ip address string
+		int a = add.sin_addr.S_un.S_un_b.s_b1;
+		portCommand += to_string(a) + ",";
+		a = add.sin_addr.S_un.S_un_b.s_b2;
+		portCommand += to_string(a) + ",";
+		a = add.sin_addr.S_un.S_un_b.s_b3;
+		portCommand += to_string(a) + ",";
+		a = add.sin_addr.S_un.S_un_b.s_b4;
+		portCommand += to_string(a) + ",";
+		//Append port to command
+		ClientData.GetSockName((sockaddr*)&add, &addlen);
+		int port = ntohs(add.sin_port);
+		portCommand += to_string(port / 256) + ",";
+		portCommand += to_string(port % 256);
+		portCommand = "port " + portCommand + "\r\n";
+		sock.Send(portCommand.c_str(), portCommand.length());
+		string res= receiveMessage(sock);
+		cout << res;
+	}
+	return true;
+}
+
+void uploadFile(CSocket& sock, CSocket &data, string filename,bool passive) {
+	string stringSend = "STOR " + filename + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	CSocket activeSock;
+	if (!passive)data.Accept(activeSock);
+	cout << receiveMessage(sock);
+	//Open file
+	ifstream is;
+	is.open(filename, ios::in | ios::app | ios::binary);
+	is.seekg(0, is.end);
+	int lengthFile = is.tellg();
+	is.seekg(0, is.beg);
+	//Data tranfer
+	char* buffer = new char[lengthFile];
+	int receivedLen = 0;
+	is.read(buffer, lengthFile);
+	if (passive) {
+		receivedLen = data.Send(buffer, lengthFile, 0);
+	}
+	else {
+		receivedLen = activeSock.Send(buffer, lengthFile, 0);
+	}
+	if (receivedLen == -1) {
+		cout << "Error when sending server data" << endl;
+	}
+	//close
+	is.close();
+	if (!passive)activeSock.Close();
+	delete[]buffer;
+	cout << receiveMessage(sock);
+}
+
+void deleteFile(CSocket& sock, string fileName) {
+	string stringSend = "DELE " + fileName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+}
+
+void createFolder(CSocket& sock, string folderName) {
+	string stringSend = "MKD " + folderName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+}
+
+void deleteEmptyFolder(CSocket& sock, string folderName) {
+	string stringSend = "RMD " + folderName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
 }

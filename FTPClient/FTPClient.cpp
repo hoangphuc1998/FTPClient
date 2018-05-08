@@ -37,10 +37,22 @@ int main()
 				cout << "Socket initialization failed" << endl;
 				return 1;
 			}
-			CSocket client;
+			
+			CSocket client,ClientData,activeSock;
+			//Socket is used to send command to server
 			client.Create();
+			activeSock.Create();
+			ClientData.Create();
+			//Listen on active port
+			int reso = activeSock.Listen();
+			if (reso == 0) {
+				cout << "Cannot listen in this port" << endl;
+			}
 			string ftpServer;
+			//Socket to send and receive data
+			
 			bool connected = false;
+			bool passive = false;
 			do {
 				//cout << "-->FTP server: ";
 				//getline(cin, ftpServer);
@@ -60,9 +72,71 @@ int main()
 				cout << "-->ftp: ";
 				string command;
 				getline(cin, command);
-				sendCommandToServer(client,command);
+				stringstream is(command);
+				is >> command;
+				for (int i = 0; i < command.length(); i++) {
+					command[i] = tolower(command[i]);
+				}
+				if (command == "pwd") {
+					command += "\r\n";
+					client.Send((char*)command.c_str(), command.length());
+					cout << receiveMessage(client);
+				}
+				else if (command == "cd") {
+					command = getParameter(is, "cd");
+					changeServerPath(client, command);
+				}
+				else if (command == "lcd") {
+					command = getParameter(is, "lcd");
+					changeClientPath(command);
+				}
+				else if (command == "get") {
+					command = getParameter(is, "get");
+					if (passive) {
+						connectDataPort(client, ClientData, passive);
+						getFile(client, ClientData, command, passive);
+					}
+					else {
+						connectDataPort(client, activeSock, passive);
+						getFile(client, activeSock, command, passive);
+					}
+				}
+				else if (command == "passive") {
+					passive = true;
+				}
+				else if (command == "delete") {
+					command = getParameter(is, "delete");
+					deleteFile(client, command);
+				}
+				else if (command == "mkdir") {
+					command = getParameter(is, "mkdir");
+					createFolder(client, command);
+				}
+				else if (command == "rmdir") {
+					command = getParameter(is, "rmdir");
+					deleteEmptyFolder(client, command);
+				}
+				else if (command == "quit" || command == "exit") {
+					string stringSend = "QUIT\n";
+					client.Send((char*)stringSend.c_str(), stringSend.length());
+					cout << receiveMessage(client);
+				}
+				else if (command == "put") {
+					command = getParameter(is, "put");
+					if (passive) {
+						connectDataPort(client, ClientData, passive);
+						uploadFile(client, ClientData, command, passive);
+					}
+					else {
+						connectDataPort(client, activeSock, passive);
+						uploadFile(client, activeSock, command, passive);
+					}
+				}
+				
 			};
 			client.Close();
+			ClientData.Close();
+			activeSock.Close();
         }
     }
     else
@@ -71,6 +145,5 @@ int main()
         wprintf(L"Fatal Error: GetModuleHandle failed\n");
         nRetCode = 1;
     }
-
     return nRetCode;
 }

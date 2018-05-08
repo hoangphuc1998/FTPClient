@@ -8,8 +8,6 @@
 #include "FTPClient.h"
 #define MAX_BUFFER 1024
 using namespace std;
-//Analyze the command and send to server
-void sendCommandToServer(CSocket&,string);
 //Receive a message from FTP server
 string receiveMessage(CSocket& sock);
 //Extract code from server message
@@ -17,9 +15,9 @@ int getMessageCode(string);
 //Login to server
 void logIn(CSocket& sock);
 //Get file from server
-void getFile(CSocket&, string);
+void getFile(CSocket&,CSocket&, string,bool);
 //Upload a file to server
-void uploadFile(CSocket&, string);
+void uploadFile(CSocket&,CSocket&, string,bool);
 //Create new folder
 void createFolder(CSocket&, string);
 //Delete a file in server
@@ -34,3 +32,11 @@ void changeServerPath(CSocket&, string);
 void changeClientPath(string);
 //Get parameter from a command
 string getParameter(stringstream&, string);
+//Connect to data port
+bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive);
+//Create new folder
+void createFolder(CSocket&, string);
+//Delete a file in server
+void deleteFile(CSocket&, string);
+//Delete empty folder in server
+void deleteEmptyFolder(CSocket&, string);

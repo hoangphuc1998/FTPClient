@@ -17,10 +17,54 @@ string receiveMessage(CSocket& sock) {
 }
 
 int getMessageCode(string message) {
-	istringstream is(message);
+	stringstream is(message);
 	string code;
 	is >> code;
 	return stoi(code);
+}
+
+void sendCommandToServer(CSocket& sock, string s) {
+	stringstream is(s);
+	string command;
+	is >> command;
+	for (int i = 0; i < command.length(); i++) {
+		command[i] = tolower(command[i]);
+	}
+	if (command == "pwd") {
+		command += "\r\n";
+		sock.Send((char*)command.c_str(), command.length());
+		cout << receiveMessage(sock);
+	}
+	else if (command == "cd") {
+		command = getParameter(is, "cd");
+		changeServerPath(sock, command);
+	}
+	else if (command == "lcd") {
+		command = getParameter(is, "lcd");
+		changeClientPath(command);
+	}
+	else if (command == "get") {
+		command = getParameter(is, "get");
+		//getFile(sock, command);
+	}
+	else if (command == "delete") {
+		command = getParameter(is, "delete");
+		deleteFile(sock, command);
+	}
+	else if (command == "mkdir") {
+		command = getParameter(is, "mkdir");
+		createFolder(sock, command);
+	}
+	else if (command == "rmdir") {
+		command = getParameter(is, "rmdir");
+		deleteEmptyFolder(sock, command);
+	}
+	else if (command == "quit" || command == "exit") {
+		string stringSend = "QUIT\n";
+		sock.Send((char*)stringSend.c_str(), stringSend.length());
+		cout << receiveMessage(sock);
+	}
+
 }
 
 void logIn(CSocket& sock) {
@@ -29,27 +73,25 @@ void logIn(CSocket& sock) {
 	do {
 		cout << "-->Username: ";
 		getline(cin, username);
-		username = "user " + username + "\n";
+		username = "user " + username + "\r\n";
 		sock.Send((char*)username.c_str(), username.length());
 		cout << receiveMessage(sock);
 		cout << "-->Password: ";
 		getline(cin, pass);
-		pass = "pass " + pass + "\n";
+		pass = "pass " + pass + "\r\n";
 		sock.Send((char*)pass.c_str(), pass.length());
 		string message = receiveMessage(sock);
 		cout << message;
 		code = getMessageCode(message);
 	} while (code != 230);
 }
-void uploadFile(CSocket &sock) {
-	string stringSend;
-	string PASV = "PASV\n";
-	if (AfxSocketInit() == false) {
-		cout << "Socket initialization failed" << endl;
-		return;
-	}
-	CSocket ClientData;
-	ClientData.Create();
+
+
+void getFile(CSocket& sock, CSocket& data, string filename) {
+	/*string PASV = "PASV\n";
+	
+	CSocket data;
+	data.Create();
 
 	int code = 0;
 	sock.Send((char*)PASV.c_str(), PASV.length());
@@ -60,7 +102,7 @@ void uploadFile(CSocket &sock) {
 	cout << message;
 	string IP;
 	int port;
-		
+
 	//Xử lý tách chuỗi a1 a2 ....
 	int pos = message.find('(');
 	string c = message.substr(pos);
@@ -78,30 +120,121 @@ void uploadFile(CSocket &sock) {
 	port = stoi(tokens[4]) * 256 + stoi(tokens[5]);
 	bool connected = false;
 
-	const char* msg = (const char*)IP.c_str();
-	wchar_t *wmsg = new wchar_t[strlen(msg) + 1];
-	mbstowcs(wmsg, msg, strlen(msg) + 1);
+	if (data.Connect(_T("127.0.0.1"), port) == 0) {
+		cout << "Can't connect to FTP server" << endl;
+	}
+	else {
+		cout << "Successfully connect to FTP server" << endl;
+		connected = true;
+	}*/
+	string stringSend = "RETR " + filename + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
 
-	cout << port;
+	//Open file
+	ofstream f;
+	f.open(filename,ios::out|ios::app|ios::binary);
+	//Data tranfer
+	char buffer[MAX_BUFFER];
+	int receivedLen = 0;
 	do {
-		//cout << "-->FTP server: ";
-		//getline(cin, ftpServer);
-		if (ClientData.Connect(_T("127.0.0.1"), port) == 0) {
-			cout << "Can't connect to FTP server" << endl;
+		receivedLen = data.Receive(buffer, MAX_BUFFER, 0);
+		if (receivedLen == -1) {
+			cout << "Error when receiving server data" << endl;
+			break;
 		}
 		else {
-			cout << "Successfully connect to FTP server" << endl;
-			cout << receiveMessage(ClientData);
-			connected = true;
+			f.write(buffer, receivedLen);
 		}
-	} while (!connected);
-	do {
-		string fileName;
-		cin >> fileName;
-		stringSend = "RETR " + fileName + "\n";
-		ClientData.Send((char*)stringSend.c_str(), stringSend.length());
-		code = getMessageCode(message);
-		cout << code;
-		cout << receiveMessage(ClientData);
-	} while (code == 503);
+	} while (receivedLen>0);
+	//f.close();
+	data.Close();
+	cout << receiveMessage(sock);
+}
+
+void uploadFile(CSocket& sock, CSocket &data, string filename) {
+	string stringSend = "STOR " + filename + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+
+	//Open file
+	ifstream is;
+	is.open(filename, ios::in | ios::app | ios::binary);
+	is.seekg(0, is.end);
+	int lengthFile = is.tellg();
+	is.seekg(0, is.beg);
+	//Data tranfer
+	char* buffer = new char[lengthFile];
+	int receivedLen = 0;
+	is.read(buffer, lengthFile);
+	receivedLen = data.Send(buffer, lengthFile, 0);
+	if (receivedLen == -1) {
+		cout << "Error when sending server data" << endl;
+	}
+	cout << receiveMessage(sock);
+	//close
+	is.close();
+	data.Close();
+	cout << receiveMessage(sock);
+}
+
+void deleteFile(CSocket& sock, string fileName) {
+	string stringSend = "DELE " + fileName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+}
+
+void createFolder(CSocket& sock, string folderName) {
+	string stringSend = "MKD " + folderName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+}
+
+void deleteEmptyFolder(CSocket& sock, string folderName) {
+	string stringSend = "RMD " + folderName + "\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	cout << receiveMessage(sock);
+}
+
+
+
+
+void changeServerPath(CSocket& sock, string path) {
+	while (path == "") {
+		cout << "Remote directory: ";
+		getline(cin, path);
+		while (path[path.length() - 1] == ' ')path.pop_back();
+		while (path[0] == ' ')path.erase(path.begin(), path.begin() + 1);
+	}
+	string command = "cwd " + path + "\r\n";
+	sock.Send((char*)command.c_str(), command.length());
+	cout << receiveMessage(sock);
+}
+
+void changeClientPath(string path) {
+	while (path == "") {
+		cout << "Local directory: ";
+		getline(cin, path);
+		while (path[path.length() - 1] == ' ')path.pop_back();
+		while (path[0] == ' ')path.erase(path.begin(), path.begin() + 1);
+	}
+	int res = SetCurrentDirectoryA(path.c_str());
+	if (res != 0) {
+		char buf[256];
+		GetCurrentDirectoryA(256, buf);
+		cout << "Successfully change directory" << endl;
+		cout << "Current dir is " + string(buf) << endl;
+	}
+	else {
+		cout << "The system cannot find the path specified" << endl;
+	}
+}
+
+string getParameter(stringstream& is, string type) {
+	string temp = is.str();
+	string command;
+	while (temp[temp.length() - 1] == ' ')temp.pop_back();
+	while (temp[0] == ' ')temp.erase(temp.begin(), temp.begin() + 1);
+	if (temp == "cd") command = "";
+	else is >> command;
+	return command;
 }

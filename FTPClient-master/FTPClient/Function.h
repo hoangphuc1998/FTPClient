@@ -19,7 +19,7 @@ void logIn(CSocket& sock);
 //Get file from server
 void getFile(CSocket& sock, CSocket& data, string filename);
 //Upload a file to server
-void uploadFile(CSocket& sock, CSocket &data, string filename);
+void uploadFile(CSocket& sock, CSocket& data, string filename);
 //Create new folder
 void createFolder(CSocket&, string);
 //Delete a file in server

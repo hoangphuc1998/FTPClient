@@ -45,7 +45,7 @@ void sendCommandToServer(CSocket& sock, string s) {
 	}
 	else if (command == "get") {
 		command = getParameter(is, "get");
-		//getFile(sock, command);
+		uploadFile(sock, command);
 	}
 	else if (command == "delete") {
 		command = getParameter(is, "delete");
@@ -151,11 +151,9 @@ void getFile(CSocket& sock, CSocket& data, string filename) {
 	cout << receiveMessage(sock);
 }
 
-void uploadFile(CSocket& sock, CSocket &data, string filename) {
+void uploadFile(CSocket& sock, CSocket& data, string filename) {
 	string stringSend = "STOR " + filename + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
-	cout << receiveMessage(sock);
-
 	//Open file
 	ifstream is;
 	is.open(filename, ios::in | ios::app | ios::binary);
@@ -164,10 +162,10 @@ void uploadFile(CSocket& sock, CSocket &data, string filename) {
 	is.seekg(0, is.beg);
 	//Data tranfer
 	char* buffer = new char[lengthFile];
-	int receivedLen = 0;
+	int sendLen = 0;
 	is.read(buffer, lengthFile);
-	receivedLen = data.Send(buffer, lengthFile, 0);
-	if (receivedLen == -1) {
+	sendLen = data.Send(buffer, lengthFile, 0);
+	if (sendLen == -1) {
 		cout << "Error when sending server data" << endl;
 	}
 	cout << receiveMessage(sock);

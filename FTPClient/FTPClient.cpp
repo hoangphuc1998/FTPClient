@@ -43,11 +43,6 @@ int main()
 			client.Create();
 			
 			string ftpServer;
-			//Listen on active port
-			int reso = activeSock.Listen();
-			if (reso == 0) {
-				cout << "Cannot listen in this port" << endl;
-			}
 			bool connected = false;
 			bool passive = false;
 			do {

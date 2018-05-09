@@ -124,6 +124,7 @@ string getParameter(stringstream& is, string type) {
 //Connect to data port
 bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive) {
 	if (passive) {
+		ClientData.Create();
 		string stringSend;
 		string PASV = "PASV\n";
 		
@@ -166,6 +167,8 @@ bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive) {
 		}
 	}
 	else {
+		ClientData.Create();
+		ClientData.Listen();
 		sockaddr_in add;
 		int addlen = sizeof(add);
 		sock.GetSockName((sockaddr*)&add, &addlen);

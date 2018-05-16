@@ -50,8 +50,7 @@ void getFile(CSocket& sock,CSocket& ClientData, string filename,bool passive) {
 	CSocket activeSock;
 	if (getMessageCode(command) != 550) {
 		if (!passive) {
-			int res = ClientData.Accept(activeSock);
-			cout << res << endl;
+			ClientData.Accept(activeSock);
 		}
 		//Open file
 		ofstream f;
@@ -244,4 +243,65 @@ void deleteEmptyFolder(CSocket& sock, string folderName) {
 	string stringSend = "RMD " + folderName + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	cout << receiveMessage(sock);
+}
+
+string getFileList(CSocket& sock, CSocket& ClientData, bool passive) {
+	string stringSend = "list\r\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	string command = receiveMessage(sock);
+	cout << command;
+	CSocket activeSock;
+	//Get data from server
+	if (!passive) {
+		ClientData.Accept(activeSock);
+	}
+	string res;
+	//Data tranfer
+	char buffer[MAX_BUFFER];
+	int receivedLen = 0;
+	do {
+		if (passive) {
+			receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
+		}
+		else {
+			receivedLen = activeSock.Receive(buffer, MAX_BUFFER, 0);
+		}
+		if (receivedLen == -1) {
+			cout << "Error when receiving server data" << endl;
+			break;
+		}
+		else {
+			res.append(buffer);
+		}
+	} while (receivedLen > 0);
+	cout << receiveMessage(sock);
+	if (!passive)activeSock.Close();
+	return res;
+}
+
+vector<string> analyzeFileList(string list) {
+	vector<string> res;
+	string temp ="";
+	for (int i = 0; i < list.length(); i++) {
+		if (list[i] != '\r') {
+			temp += list[i];
+		}
+		else {
+			temp += '\0';
+			if (res.size() > 0 && temp == res[0]) {
+				break;
+			}
+			else {
+				res.push_back(temp);
+			}
+			i++;
+			temp = "";
+		}
+	}
+}
+
+void printFileList(vector<string> list) {
+	for (int i = 0; i < list.size(); i++) {
+		cout << list[i] << endl;
+	}
 }

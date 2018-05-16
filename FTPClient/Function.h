@@ -40,3 +40,9 @@ void createFolder(CSocket&, string);
 void deleteFile(CSocket&, string);
 //Delete empty folder in server
 void deleteEmptyFolder(CSocket&, string);
+//Listing file and folder in server
+string getFileList(CSocket&, CSocket&, bool);
+//Analyze the ls command and return list of files
+vector<string> analyzeFileList(string);
+//Print list file
+void printFileList(vector<string>);

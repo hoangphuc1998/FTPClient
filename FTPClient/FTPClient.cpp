@@ -53,8 +53,20 @@ int main()
 				}
 				else {
 					cout << "Successfully connect to FTP server" << endl;
-					cout << receiveMessage(client);
+					vector<char> buffer(MAX_BUFFER);
+					int byteReceived = 0;
+					string res;
+					do {
+						byteReceived = client.Receive(&buffer[0], MAX_BUFFER, 0);
+						if (byteReceived == -1) {
+							cout << "Error when receiving server data" << endl;
+						}
+						else {
+							res.append(buffer.begin(), buffer.begin() + byteReceived);
+						}
+					} while (byteReceived == MAX_BUFFER);
 					connected = true;
+					cout << res;
 				}
 			} while (!connected);
 			//Login to server
@@ -122,6 +134,18 @@ int main()
 					else {
 						connectDataPort(client, activeSock, passive);
 						uploadFile(client, activeSock, command, passive);
+					}
+				}
+				else if (command == "ls" || command == "dir") {
+					if (passive) {
+						connectDataPort(client, ClientData, passive);
+						cout << getFileList(client, ClientData, passive);
+						//printFileList(list);
+					}
+					else {
+						connectDataPort(client, activeSock, passive);
+						cout<<getFileList(client, activeSock, passive);
+						//printFileList(list);
 					}
 				}
 

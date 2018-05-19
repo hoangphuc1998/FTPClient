@@ -42,18 +42,21 @@ void logIn(CSocket& sock) {
 	} while (code != 230);
 }
 
-void getFile(CSocket& sock,CSocket& ClientData, string filename,bool passive) {
+bool getFile(CSocket& sock,CSocket& ClientData, string filename,bool passive) {
 	string stringSend = "RETR " + filename + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	string command = receiveMessage(sock);
 	cout << command;
 	CSocket activeSock;
-	if (getMessageCode(command) != 550) {
+	bool success = false;
+	if (getMessageCode(command) == 150) {
 		if (!passive) {
 			ClientData.Accept(activeSock);
 		}
 		//Open file
 		ofstream f;
+		int pos = filename.find("/");
+		filename = filename.substr(pos + 1);
 		f.open(filename, ios::out | ios::binary);
 		//Data tranfer
 		char buffer[MAX_BUFFER];
@@ -75,16 +78,18 @@ void getFile(CSocket& sock,CSocket& ClientData, string filename,bool passive) {
 		} while (receivedLen > 0);
 		f.close();
 		cout << receiveMessage(sock);
+		success = true;
 	}
 	if (!passive)activeSock.Close();
+	else ClientData.Close();
+	return success;
 }
 
 void changeServerPath(CSocket& sock, string path) {
 	while (path == "") {
 		cout << "Remote directory: ";
 		getline(cin, path);
-		while (path[path.length() - 1] == ' ')path.pop_back();
-		while (path[0] == ' ')path.erase(path.begin(), path.begin() + 1);
+		deleteSpaces(path);
 	}
 	string command = "cwd " + path + "\r\n";
 	sock.Send((char*)command.c_str(), command.length());
@@ -95,8 +100,7 @@ void changeClientPath(string path) {
 	while (path == "") {
 		cout << "Local directory: ";
 		getline(cin, path);
-		while (path[path.length() - 1] == ' ')path.pop_back();
-		while (path[0] == ' ')path.erase(path.begin(), path.begin() + 1);
+		deleteSpaces(path);
 	}
 	int res = SetCurrentDirectoryA(path.c_str());
 	if (res != 0) {
@@ -113,9 +117,8 @@ void changeClientPath(string path) {
 string getParameter(stringstream& is, string type) {
 	string temp = is.str();
 	string command;
-	while (temp[temp.length() - 1] == ' ')temp.pop_back();
-	while (temp[0] == ' ')temp.erase(temp.begin(), temp.begin() + 1);
-	if (temp == "cd") command = "";
+	deleteSpaces(temp);
+	if (temp == type) command = "";
 	else is >> command;
 	return command;
 }
@@ -157,13 +160,13 @@ bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive) {
 		wchar_t *wmsg = new wchar_t[strlen(msg) + 1];
 		mbstowcs(wmsg, msg, strlen(msg) + 1);
 
-		if (ClientData.Connect(_T("127.0.0.1"), port) == 0) {
+		if (ClientData.Connect(wmsg, port) == 0) {
 			cout << "Can't connect to FTP server" << endl;
 			return false;
 		}
-		else {
-			cout << "Successfully connect to FTP server" << endl;
-		}
+		//else {
+		//	cout << "Successfully connect to FTP server" << endl;
+		//}
 	}
 	else {
 		ClientData.Create();
@@ -195,113 +198,356 @@ bool connectDataPort(CSocket& sock,CSocket& ClientData, bool passive) {
 	return true;
 }
 
-void uploadFile(CSocket& sock, CSocket &data, string filename,bool passive) {
-	string stringSend = "STOR " + filename + "\n";
-	sock.Send((char*)stringSend.c_str(), stringSend.length());
-	CSocket activeSock;
-	if (!passive)data.Accept(activeSock);
-	cout << receiveMessage(sock);
+bool uploadFile(CSocket& sock, CSocket &data, string filename,bool passive) {
+	while (filename == "") {
+		cout << "Upload file: ";
+		getline(cin, filename);
+		deleteSpaces(filename);
+	}
 	//Open file
 	ifstream is;
-	is.open(filename, ios::in | ios::app | ios::binary);
-	is.seekg(0, is.end);
-	int lengthFile = is.tellg();
-	is.seekg(0, is.beg);
-	//Data tranfer
-	char* buffer = new char[lengthFile];
-	int receivedLen = 0;
-	is.read(buffer, lengthFile);
-	if (passive) {
-		receivedLen = data.Send(buffer, lengthFile, 0);
+	is.open(filename,ios::binary | ios::in);
+	bool success = false;
+	if (is.good()) {
+		is.seekg(0, is.end);
+		int lengthFile = is.tellg();
+		is.seekg(0, is.beg);
+		string stringSend = "STOR " + filename + "\n";
+		sock.Send((char*)stringSend.c_str(), stringSend.length());
+		CSocket activeSock;
+		if (!passive)data.Accept(activeSock);
+		cout << receiveMessage(sock);
+
+		//Data tranfer
+		char* buffer = new char[lengthFile];
+		int receivedLen = 0;
+		is.read(buffer, lengthFile);
+		if (passive) {
+			receivedLen = data.Send(buffer, lengthFile, 0);
+		}
+		else {
+			receivedLen = activeSock.Send(buffer, lengthFile, 0);
+		}
+		if (receivedLen == -1) {
+			cout << "Error when sending server data" << endl;
+		}
+		//close
+		is.close();
+		if (!passive)activeSock.Close();
+		else data.Close();
+		delete[]buffer;
+		cout << receiveMessage(sock);
+		success = true;
 	}
 	else {
-		receivedLen = activeSock.Send(buffer, lengthFile, 0);
+		cout<<"There is no file name "<<filename<<endl;
 	}
-	if (receivedLen == -1) {
-		cout << "Error when sending server data" << endl;
-	}
-	//close
-	is.close();
-	if (!passive)activeSock.Close();
-	delete[]buffer;
-	cout << receiveMessage(sock);
+	return success;
 }
 
-void deleteFile(CSocket& sock, string fileName) {
-	string stringSend = "DELE " + fileName + "\n";
+void deleteFile(CSocket& sock, string filename) {
+	while (filename == "") {
+		cout << "Upload file: ";
+		getline(cin, filename);
+		deleteSpaces(filename);
+	}
+	string stringSend = "DELE " + filename + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	cout << receiveMessage(sock);
 }
 
 void createFolder(CSocket& sock, string folderName) {
+	while (folderName == "") {
+		cout << "New folder: ";
+		getline(cin, folderName);
+		deleteSpaces(folderName);
+	}
 	string stringSend = "MKD " + folderName + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	cout << receiveMessage(sock);
 }
 
 void deleteEmptyFolder(CSocket& sock, string folderName) {
+	while (folderName == "") {
+		cout << "Delete empty folder: ";
+		getline(cin, folderName);
+		deleteSpaces(folderName);
+	}
 	string stringSend = "RMD " + folderName + "\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	cout << receiveMessage(sock);
 }
 
-string getFileList(CSocket& sock, CSocket& ClientData, bool passive) {
-	string stringSend = "list\r\n";
+string getFileListDetail(CSocket& sock, CSocket& ClientData,string folderName, bool passive) {
+	string stringSend = "list "+ folderName +"\r\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	string command = receiveMessage(sock);
 	cout << command;
-	CSocket activeSock;
-	//Get data from server
-	if (!passive) {
-		ClientData.Accept(activeSock);
-	}
-	string res;
-	//Data tranfer
-	char buffer[MAX_BUFFER];
-	int receivedLen = 0;
-	do {
-		if (passive) {
-			receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
+	int code = getMessageCode(command);
+	string res = "";
+	if (code != 550) {
+		CSocket activeSock;
+		//Get data from server
+		if (!passive) {
+			ClientData.Accept(activeSock);
 		}
-		else {
-			receivedLen = activeSock.Receive(buffer, MAX_BUFFER, 0);
-		}
-		if (receivedLen == -1) {
-			cout << "Error when receiving server data" << endl;
-			break;
-		}
-		else {
-			res.append(buffer);
-		}
-	} while (receivedLen > 0);
-	cout << receiveMessage(sock);
-	if (!passive)activeSock.Close();
-	return res;
-}
-
-vector<string> analyzeFileList(string list) {
-	vector<string> res;
-	string temp ="";
-	for (int i = 0; i < list.length(); i++) {
-		if (list[i] != '\r') {
-			temp += list[i];
-		}
-		else {
-			temp += '\0';
-			if (res.size() > 0 && temp == res[0]) {
+		
+		//Data tranfer
+		char buffer[MAX_BUFFER];
+		int receivedLen = 0;
+		do {
+			if (passive) {
+				receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
+			}
+			else {
+				receivedLen = activeSock.Receive(buffer, MAX_BUFFER, 0);
+			}
+			if (receivedLen == -1) {
+				cout << "Error when receiving server data" << endl;
 				break;
 			}
 			else {
-				res.push_back(temp);
+				res.append(buffer);
 			}
+		} while (receivedLen > 0);
+		res = res.substr(res.length() / 2);
+		cout << receiveMessage(sock);
+		if (!passive)activeSock.Close();
+	}
+	return res;
+}
+
+vector<string> getFileList(CSocket& sock, CSocket& ClientData, string folderName, bool passive) {
+	string stringSend = "nlst " + folderName + "\r\n";
+	sock.Send((char*)stringSend.c_str(), stringSend.length());
+	string command = receiveMessage(sock);
+	//cout << command;
+	int code = getMessageCode(command);
+	string res = "";
+	if (code == 150) {
+		CSocket activeSock;
+		//Get data from server
+		if (!passive) {
+			ClientData.Accept(activeSock);
+		}
+
+		//Data tranfer
+		char buffer[MAX_BUFFER];
+		int receivedLen = 0;
+		do {
+			if (passive) {
+				receivedLen = ClientData.Receive(buffer, MAX_BUFFER, 0);
+			}
+			else {
+				receivedLen = activeSock.Receive(buffer, MAX_BUFFER, 0);
+			}
+			if (receivedLen == -1) {
+				cout << "Error when receiving server data" << endl;
+				break;
+			}
+			else {
+				res.append(buffer);
+			}
+		} while (receivedLen > 0);
+		res = res.substr(res.length() / 2);
+		cout << receiveMessage(sock);
+		if (!passive)activeSock.Close();
+		else ClientData.Close();
+	}
+	vector<string> result;
+	string temp = "";
+	for (int i = 0; i < res.length(); i++) {
+		if (res[i] == '\r') {
 			i++;
+			result.push_back(temp);
 			temp = "";
+		}
+		else {
+			temp += res[i];
+		}
+	}
+	return result;
+}
+
+void deleteMultipleFiles(CSocket& sock, CSocket& ClientData, CSocket& activeSock, stringstream& is, bool passive) {
+	string fullCommand = is.str();
+	if (fullCommand == "mdelete") {
+		string temp = "";
+		while (temp == "") {
+			cout << "Files and folders to delete: " << endl;
+			getline(cin, temp);
+			is = stringstream(temp);
+		}
+	}
+	string name;
+	while (!is.eof()) {
+		is >> name;
+		cout << "Type y to delete file" << endl;
+		if (name != "") {
+			cout << "Delete " << name << " Y/N?";
+			string answer;
+			getline(cin, answer);
+			deleteSpaces(answer);
+			if (answer != "n" && answer != "N") {
+				deleteFile(sock, name);
+			}
+			vector<string>fileList;
+			if (passive) {
+				connectDataPort(sock, ClientData, passive);
+				fileList = getFileList(sock, ClientData, name, passive);
+			}
+			else {
+				connectDataPort(sock, activeSock, passive);
+				fileList = getFileList(sock, activeSock, name, passive);
+			}
+			for (int i = 0; i < fileList.size(); i++) {
+				cout << "Delete " << fileList[i] << " Y/N?";
+				string answer;
+				getline(cin, answer);
+				deleteSpaces(answer);
+				if (answer != "n" && answer != "N") {
+					deleteFile(sock, fileList[i]);
+				}
+			}
 		}
 	}
 }
 
-void printFileList(vector<string> list) {
-	for (int i = 0; i < list.size(); i++) {
-		cout << list[i] << endl;
+void deleteSpaces(string& s) {
+	while (s[s.length() - 1] == ' ')s.pop_back();
+	while (s[0] == ' ')s.erase(s.begin(), s.begin() + 1);
+}
+
+void getMultipleFiles(CSocket& sock, CSocket& ClientData,CSocket& activeSock, stringstream& is, bool passive) {
+	string fullCommand = is.str();
+	if (fullCommand == "mget") {
+		string temp = "";
+		while (temp == "") {
+			cout << "Files and folders to download: " << endl;
+			getline(cin, temp);
+			is = stringstream(temp);
+		}
 	}
+	string name;
+	while (!is.eof()) {
+		is >> name;
+		cout << "Type y to download file" << endl;
+		if (name != "") {
+			bool fileDownload = false;
+			cout << "Download " << name << " Y/N?";
+			string answer;
+			getline(cin, answer);
+			deleteSpaces(answer);
+			if (answer != "n" && answer != "N") {
+				if (passive) {
+					connectDataPort(sock, ClientData, passive);
+					fileDownload = getFile(sock, ClientData, name, passive);
+				}
+				else {
+					connectDataPort(sock, activeSock, passive);
+					fileDownload = getFile(sock, activeSock, name, passive);
+				}
+			}
+			if (!fileDownload) {
+				vector<string>fileList;
+				if (passive) {
+					connectDataPort(sock, ClientData, passive);
+					fileList = getFileList(sock, ClientData, name, passive);
+				}
+				else {
+					connectDataPort(sock, activeSock, passive);
+					fileList = getFileList(sock, activeSock, name, passive);
+				}
+				for (int i = 0; i < fileList.size(); i++) {
+					if (fileList[i] != name) {
+						cout << "Download " << fileList[i] << " Y/N?";
+						string answer;
+						getline(cin, answer);
+						deleteSpaces(answer);
+						if (answer != "n" && answer != "N") {
+							if (passive) {
+								connectDataPort(sock, ClientData, passive);
+								getFile(sock, ClientData, fileList[i], passive);
+							}
+							else {
+								connectDataPort(sock, activeSock, passive);
+								getFile(sock, activeSock, fileList[i], passive);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+void uploadMultipleFiles(CSocket& sock, CSocket& ClientData, CSocket& activeSock, stringstream& is, bool passive) {
+	string fullCommand = is.str();
+	if (fullCommand == "mput") {
+		string temp = "";
+		while (temp == "") {
+			cout << "Files and folders to upload: " << endl;
+			getline(cin, temp);
+			is = stringstream(temp);
+		}
+	}
+	string name;
+	while (!is.eof()) {
+		is >> name;
+		if (name != "") {
+			bool fileUpload = false;
+			cout << "Upload " << name << " Y/N?";
+			string answer;
+			getline(cin, answer);
+			deleteSpaces(answer);
+			if (answer != "n" && answer != "N") {
+				if (passive) {
+					connectDataPort(sock, ClientData, passive);
+					fileUpload = uploadFile(sock, ClientData, name, passive);
+				}
+				else {
+					connectDataPort(sock, activeSock, passive);
+					fileUpload = uploadFile(sock, activeSock, name, passive);
+				}
+			}
+			if (!fileUpload) {
+				vector<string>fileList;
+				fileList = getFileListClient(name);
+				for (int i = 0; i < fileList.size(); i++) {
+					if (fileList[i] != name) {
+						cout << "Upload " << fileList[i] << " Y/N?";
+						string answer;
+						getline(cin, answer);
+						deleteSpaces(answer);
+						if (answer !="n" && answer!="N") {
+							if (passive) {
+								connectDataPort(sock, ClientData, passive);
+								uploadFile(sock, ClientData, fileList[i], passive);
+							}
+							else {
+								connectDataPort(sock, activeSock, passive);
+								uploadFile(sock, activeSock, fileList[i], passive);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+vector<string> getFileListClient(string folderName) {
+	char path[MAX_BUFFER];
+	GetCurrentDirectoryA(MAX_BUFFER, path);
+	vector<string>res;
+	WIN32_FIND_DATA find;
+	HANDLE h;
+	folderName = string(path) + "\\" + folderName + "\\*";
+	h = FindFirstFile((LPCWSTR)folderName.c_str(), &find);
+	do {
+		cout << find.cFileName << endl;
+		wstring temp(find.cFileName);
+		res.push_back(string(temp.begin(),temp.end()));
+	} while (FindNextFile(h, &find) == true);
+	return res;
 }

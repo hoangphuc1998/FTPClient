@@ -15,9 +15,9 @@ int getMessageCode(string);
 //Login to server
 void logIn(CSocket& sock);
 //Get file from server
-void getFile(CSocket&,CSocket&, string,bool);
+bool getFile(CSocket&,CSocket&, string,bool);
 //Upload a file to server
-void uploadFile(CSocket&,CSocket&, string,bool);
+bool uploadFile(CSocket&,CSocket&, string,bool);
 //Create new folder
 void createFolder(CSocket&, string);
 //Delete a file in server
@@ -41,8 +41,18 @@ void deleteFile(CSocket&, string);
 //Delete empty folder in server
 void deleteEmptyFolder(CSocket&, string);
 //Listing file and folder in server
-string getFileList(CSocket&, CSocket&, bool);
+vector<string> getFileList(CSocket&, CSocket&,string, bool);
+//Listing file and folder detail in server
+string getFileListDetail(CSocket&, CSocket&,string, bool);
 //Analyze the ls command and return list of files
 vector<string> analyzeFileList(string);
-//Print list file
-void printFileList(vector<string>);
+//Delete multiple files
+void deleteMultipleFiles(CSocket&, CSocket&,CSocket&, stringstream&, bool);
+//Delete space at begin and end of the command
+void deleteSpaces(string&);
+//Download multiple files
+void getMultipleFiles(CSocket&, CSocket&,CSocket&, stringstream&, bool);
+//Upload multiple files
+void uploadMultipleFiles(CSocket&, CSocket&, CSocket&, stringstream&, bool);
+//Get file list in a folder in client
+vector<string> getFileListClient(string);

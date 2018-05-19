@@ -46,9 +46,13 @@ int main()
 			bool connected = false;
 			bool passive = false;
 			do {
-				//cout << "-->FTP server: ";
-				//getline(cin, ftpServer);
-				if (client.Connect(_T("127.0.0.1"), 21) == 0) {
+				cout << "-->FTP server: ";
+				getline(cin, ftpServer);
+				deleteSpaces(ftpServer);
+				const char* msg = (const char*)ftpServer.c_str();
+				wchar_t *rIP = new wchar_t[strlen(msg) + 1];
+				mbstowcs(rIP, msg, strlen(msg) + 1);
+				if (client.Connect(rIP, 21) == 0) {
 					cout << "Can't connect to FTP server" << endl;
 				}
 				else {
@@ -76,6 +80,7 @@ int main()
 				cout << "-->ftp: ";
 				string command;
 				getline(cin, command);
+				deleteSpaces(command);
 				stringstream is(command);
 				is >> command;
 				for (int i = 0; i < command.length(); i++) {
@@ -107,6 +112,7 @@ int main()
 				}
 				else if (command == "passive") {
 					passive = true;
+					cout << "Successfully change to passive mode" << endl;
 				}
 				else if (command == "delete") {
 					command = getParameter(is, "delete");
@@ -136,19 +142,39 @@ int main()
 						uploadFile(client, activeSock, command, passive);
 					}
 				}
-				else if (command == "ls" || command == "dir") {
+				else if (command == "ls") {
+					command = getParameter(is, "ls");
 					if (passive) {
 						connectDataPort(client, ClientData, passive);
-						cout << getFileList(client, ClientData, passive);
+						cout << getFileListDetail(client, ClientData, command, passive);
 						//printFileList(list);
 					}
 					else {
 						connectDataPort(client, activeSock, passive);
-						cout<<getFileList(client, activeSock, passive);
+						cout<<getFileListDetail(client, activeSock, command, passive);
+					}
+				}
+				else if (command == "dir") {
+					command = getParameter(is, "dir");
+					if (passive) {
+						connectDataPort(client, ClientData, passive);
+						cout << getFileListDetail(client, ClientData, command, passive);
+					}
+					else {
+						connectDataPort(client, activeSock, passive);
+						cout << getFileListDetail(client, activeSock, command, passive);
 						//printFileList(list);
 					}
 				}
-
+				else if (command == "mdelete") {
+					deleteMultipleFiles(client, ClientData, activeSock, is, passive);
+				}
+				else if (command == "mget") {
+					getMultipleFiles(client, ClientData, activeSock, is, passive);
+				}
+				else if (command == "mput") {
+					uploadMultipleFiles(client, ClientData, activeSock, is, passive);
+				}
 			};
 			client.Close();
 			ClientData.Close();

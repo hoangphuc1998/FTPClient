@@ -311,13 +311,15 @@ string getFileListDetail(CSocket& sock, CSocket& ClientData,string folderName, b
 			}
 		} while (receivedLen > 0);
 		res = res.substr(res.length() / 2);
+		while (res.length()>0 && res[res.length() - 1] != '\n') res.pop_back();
 		cout << receiveMessage(sock);
 		if (!passive)activeSock.Close();
 	}
+	if (res == "0\r")res = "";
 	return res;
 }
 
-vector<string> getFileList(CSocket& sock, CSocket& ClientData, string folderName, bool passive) {
+bool getFileList(CSocket& sock, CSocket& ClientData, string folderName, bool passive, vector<string>& result) {
 	string stringSend = "nlst " + folderName + "\r\n";
 	sock.Send((char*)stringSend.c_str(), stringSend.length());
 	string command = receiveMessage(sock);
@@ -350,11 +352,12 @@ vector<string> getFileList(CSocket& sock, CSocket& ClientData, string folderName
 			}
 		} while (receivedLen > 0);
 		res = res.substr(res.length() / 2);
+		while (res.length()>0 && res[res.length() - 1] != '\n') res.pop_back();
 		cout << receiveMessage(sock);
 		if (!passive)activeSock.Close();
 		else ClientData.Close();
 	}
-	vector<string> result;
+	if (res == "0")res = "";
 	string temp = "";
 	for (int i = 0; i < res.length(); i++) {
 		if (res[i] == '\r') {
@@ -366,7 +369,12 @@ vector<string> getFileList(CSocket& sock, CSocket& ClientData, string folderName
 			temp += res[i];
 		}
 	}
-	return result;
+	if (result.size() > 0) {
+		if (result[0] == folderName) {
+			return false;
+		}
+	}
+	return true;;
 }
 
 void deleteMultipleFiles(CSocket& sock, CSocket& ClientData, CSocket& activeSock, stringstream& is, bool passive) {
@@ -384,21 +392,15 @@ void deleteMultipleFiles(CSocket& sock, CSocket& ClientData, CSocket& activeSock
 		is >> name;
 		cout << "Type y to delete file" << endl;
 		if (name != "") {
-			cout << "Delete " << name << " Y/N?";
-			string answer;
-			getline(cin, answer);
-			deleteSpaces(answer);
-			if (answer != "n" && answer != "N") {
-				deleteFile(sock, name);
-			}
+			bool isFolder;
 			vector<string>fileList;
 			if (passive) {
 				connectDataPort(sock, ClientData, passive);
-				fileList = getFileList(sock, ClientData, name, passive);
+				isFolder = getFileList(sock, ClientData, name, passive,fileList);
 			}
 			else {
 				connectDataPort(sock, activeSock, passive);
-				fileList = getFileList(sock, activeSock, name, passive);
+				isFolder = getFileList(sock, activeSock, name, passive,fileList);
 			}
 			for (int i = 0; i < fileList.size(); i++) {
 				cout << "Delete " << fileList[i] << " Y/N?";
@@ -409,6 +411,16 @@ void deleteMultipleFiles(CSocket& sock, CSocket& ClientData, CSocket& activeSock
 					deleteFile(sock, fileList[i]);
 				}
 			}
+			if (!isFolder) {
+				cout << "Delete " << name << " Y/N?";
+				string answer;
+				getline(cin, answer);
+				deleteSpaces(answer);
+				if (answer != "n" && answer != "N") {
+					deleteFile(sock, name);
+				}
+			}
+			
 		}
 	}
 }
@@ -433,47 +445,47 @@ void getMultipleFiles(CSocket& sock, CSocket& ClientData,CSocket& activeSock, st
 		is >> name;
 		cout << "Type y to download file" << endl;
 		if (name != "") {
-			bool fileDownload = false;
-			cout << "Download " << name << " Y/N?";
-			string answer;
-			getline(cin, answer);
-			deleteSpaces(answer);
-			if (answer != "n" && answer != "N") {
-				if (passive) {
-					connectDataPort(sock, ClientData, passive);
-					fileDownload = getFile(sock, ClientData, name, passive);
-				}
-				else {
-					connectDataPort(sock, activeSock, passive);
-					fileDownload = getFile(sock, activeSock, name, passive);
+			bool isFolder;
+			vector<string>fileList;
+			if (passive) {
+				connectDataPort(sock, ClientData, passive);
+				isFolder = getFileList(sock, ClientData, name, passive,fileList);
+			}
+			else {
+				connectDataPort(sock, activeSock, passive);
+				isFolder = getFileList(sock, activeSock, name, passive,fileList);
+			}
+			for (int i = 0; i < fileList.size(); i++) {
+				if (fileList[i] != name) {
+					cout << "Download " << fileList[i] << " Y/N?";
+					string answer;
+					getline(cin, answer);
+					deleteSpaces(answer);
+					if (answer != "n" && answer != "N") {
+						if (passive) {
+							connectDataPort(sock, ClientData, passive);
+							getFile(sock, ClientData, fileList[i], passive);
+						}
+						else {
+							connectDataPort(sock, activeSock, passive);
+							getFile(sock, activeSock, fileList[i], passive);
+						}
+					}
 				}
 			}
-			if (!fileDownload) {
-				vector<string>fileList;
-				if (passive) {
-					connectDataPort(sock, ClientData, passive);
-					fileList = getFileList(sock, ClientData, name, passive);
-				}
-				else {
-					connectDataPort(sock, activeSock, passive);
-					fileList = getFileList(sock, activeSock, name, passive);
-				}
-				for (int i = 0; i < fileList.size(); i++) {
-					if (fileList[i] != name) {
-						cout << "Download " << fileList[i] << " Y/N?";
-						string answer;
-						getline(cin, answer);
-						deleteSpaces(answer);
-						if (answer != "n" && answer != "N") {
-							if (passive) {
-								connectDataPort(sock, ClientData, passive);
-								getFile(sock, ClientData, fileList[i], passive);
-							}
-							else {
-								connectDataPort(sock, activeSock, passive);
-								getFile(sock, activeSock, fileList[i], passive);
-							}
-						}
+			if (!isFolder) {
+				cout << "Download " << name << " Y/N?";
+				string answer;
+				getline(cin, answer);
+				deleteSpaces(answer);
+				if (answer != "n" && answer != "N") {
+					if (passive) {
+						connectDataPort(sock, ClientData, passive);
+						getFile(sock, ClientData, name, passive);
+					}
+					else {
+						connectDataPort(sock, activeSock, passive);
+						getFile(sock, activeSock, name, passive);
 					}
 				}
 			}

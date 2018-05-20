@@ -41,7 +41,7 @@ void deleteFile(CSocket&, string);
 //Delete empty folder in server
 void deleteEmptyFolder(CSocket&, string);
 //Listing file and folder in server
-vector<string> getFileList(CSocket&, CSocket&,string, bool);
+bool getFileList(CSocket&, CSocket&,string, bool, vector<string>&);
 //Listing file and folder detail in server
 string getFileListDetail(CSocket&, CSocket&,string, bool);
 //Analyze the ls command and return list of files

@@ -149,11 +149,13 @@ int main()
 						connectDataPort(client, ClientData, passive);
 						getFileList(client, ClientData, command, passive, vstr);
 						printFileList(vstr);
+						vstr.clear();
 					}
 					else {
 						connectDataPort(client, activeSock, passive);
 						getFileList(client, activeSock, command, passive, vstr);
 						printFileList(vstr);
+						vstr.clear();
 					}
 				}
 				else if (command == "dir") {
